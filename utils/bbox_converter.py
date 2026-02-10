@@ -1,101 +1,105 @@
 import argparse
 import json
+import sys
 import os
 
 
-def load_json(path):
-    """Utility to load JSON data."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Input file not found: {path}")
-    with open(path, "r") as f:
+def load_data(file_path):
+    """Helper to load JSON with basic error handling."""
+    if not os.path.exists(file_path):
+        print(f"Error: File {file_path} not found.")
+        sys.exit(1)
+    with open(file_path, "r") as f:
         return json.load(f)
 
 
-def convert_bbox(bbox, input_fmt, output_fmt):
-    """
-    Logic for coordinate conversion.
-    TODO: Implement YOLO and specific COCO/VOC edge cases tomorrow.
-    """
-    # Current implementation: COCO [x, y, w, h] -> VOC [xmin, ymin, xmax, ymax]
-    if input_fmt == "COCO" and output_fmt == "VOC":
-        x, y, w, h = bbox
-        return [x, y, x + w, y + h]
-
-    # Placeholder for other formats
-    return bbox
-
-
 def format_converter(args):
-    print(f"--- Starting conversion: {args.input_format} to {args.output_format} ---")
+    # Load primary detection results
+    raw_data = load_data(args.input)
 
-    data = load_json(args.input)
-    reference = load_json(args.refer_path) if args.convert_image_id else None
+    # Setup for Image ID conversion
+    id_to_filename = {}
+    if args.convert_image_id:
+        reference = load_data(args.refer_path)
+        # Create a lookup map for O(1) speed instead of nested loops
+        id_to_filename = {
+            img["id"]: img["file_name"] for img in reference.get("images", [])
+        }
 
-    new_data = {}
+    converted_results = {}
 
-    for obj in data:
-        # 1. Handle Image ID / Filename Mapping
-        image_key = str(obj["image_id"])
-        if args.convert_image_id and reference:
-            # TODO: Optimize this lookup with a dictionary tomorrow for speed
-            for img in reference.get("images", []):
-                if img["id"] == obj["image_id"]:
-                    image_key = img["file_name"]
-                    break
+    for entry in raw_data:
+        image_id = entry["image_id"]
+        category_id = entry["category_id"] + 1
+        bbox = list(entry["bbox"])  # Ensure it's a list for mutability
+        score = entry.get("score", 0)
+
+        # Handle Image ID naming
+        if args.convert_image_id:
+            filename = id_to_filename.get(image_id, f"unknown_{image_id}.png")
         else:
-            image_key = f"{image_key}.png"
+            filename = f"{image_id}.png"
 
-        # 2. Convert Bounding Box
-        converted_bbox = convert_bbox(
-            obj["bbox"], args.input_format, args.output_format
-        )
+        # Coordinate Transformation: COCO [x, y, w, h] -> VOC [xmin, ymin, xmax, ymax]
+        if args.input_format == "COCO" and args.output_format == "VOC":
+            # bbox[2] (width) becomes x_max, bbox[3] (height) becomes y_max
+            bbox[2] = bbox[0] + bbox[2]
+            bbox[3] = bbox[1] + bbox[3]
 
-        # 3. Organize Data
-        if image_key not in new_data:
-            new_data[image_key] = {"boxes": [], "labels": [], "scores": []}
+        # Structure the dictionary output
+        if filename not in converted_results:
+            converted_results[filename] = {"boxes": [], "labels": [], "scores": []}
 
-        new_data[image_key]["labels"].append(obj["category_id"] + 1)
-        new_data[image_key]["boxes"].append(converted_bbox)
-        new_data[image_key]["scores"].append(obj.get("score", 0.0))
+        converted_results[filename]["labels"].append(category_id)
+        converted_results[filename]["boxes"].append(bbox)
+        converted_results[filename]["scores"].append(score)
 
-    # 4. Save Output
+    # Save output with indentation for readability
     with open(args.output, "w") as f:
-        json.dump(new_data, f, indent=4)
+        json.dump(converted_results, f, indent=4)
 
-    print(f"--- Conversion complete! Saved to: {args.output} ---")
+    print(f"Successfully converted {len(raw_data)} detections to {args.output}")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Object Detection Format Converter")
+def main():
+    parser = argparse.ArgumentParser(description="DETR/YOLO Result Format Converter")
 
-    # Path Arguments
+    # File Paths
     parser.add_argument(
-        "--input", type=str, default="results.json", help="Input JSON file"
+        "--input",
+        type=str,
+        default="yolov7_results.json",
+        help="Input JSON file from detector",
     )
     parser.add_argument(
-        "--output", type=str, default="converted_results.json", help="Output JSON file"
-    )
-
-    # Format Arguments
-    parser.add_argument(
-        "--input-format", type=str, default="COCO", choices=["COCO", "YOLO", "VOC"]
-    )
-    parser.add_argument(
-        "--output-format", type=str, default="VOC", choices=["COCO", "YOLO", "VOC"]
-    )
-
-    # Mapping Arguments
-    parser.add_argument(
-        "--convert-image-id",
-        action="store_true",
-        help="Convert numeric IDs to filenames",
+        "--output",
+        type=str,
+        default="yolov7_results_converted.json",
+        help="Filename for converted output",
     )
     parser.add_argument(
         "--refer-path",
         type=str,
-        default="annotations.json",
-        help="Reference COCO file for ID mapping",
+        default="valid/annotations.coco.json",
+        help="Reference COCO file for filename mapping",
+    )
+
+    # Configuration
+    parser.add_argument(
+        "--input-format", type=str, default="COCO", help="Input bbox format"
+    )
+    parser.add_argument(
+        "--output-format", type=str, default="VOC", help="Output bbox format"
+    )
+    parser.add_argument(
+        "--convert-image-id",
+        action="store_true",
+        help="Convert numeric IDs to filenames using reference path",
     )
 
     args = parser.parse_args()
     format_converter(args)
+
+
+if __name__ == "__main__":
+    main()
