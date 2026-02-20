@@ -1,16 +1,16 @@
-# YOLOv7 Object Detection on Cityscapes 🚗
+# YOLOv7 Object Detection on Cityscapes
 
 **Author:** Sri Mohan Abburi  
 **Course:** Digital Image Processing (Bonus Project)  
 
 ---
 
-## 📌 Project Overview
+## Project Overview
 Navigating urban environments requires more than just seeing—it requires understanding. This project implements a real-time object detection pipeline using **YOLOv7** trained on the **Cityscapes Dataset**. 
 
 The goal was to move beyond basic detection and tackle the nuances of urban "clutter," accurately identifying vehicles, pedestrians, and riders in high-density street scenes.
 
-## 🛠️ Key Features & Problem Solving
+## Key Features & Problem Solving
 
 ### 1. Custom Data Engineering
 Cityscapes labels aren't ready for YOLO out of the box. I developed a custom pipeline to handle the heavy lifting:
@@ -27,7 +27,7 @@ Urban detection is best viewed in motion. I integrated `MoviePy` and `PyAV` to p
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 * `utils/bbox_converter.py`: Core logic for bounding box math and coordinate normalization.
 * `utils/data_prep.py`: Automation script for dataset organization and label export.
@@ -35,7 +35,7 @@ Urban detection is best viewed in motion. I integrated `MoviePy` and `PyAV` to p
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Installation
 Clone the repo and install the requirements:
